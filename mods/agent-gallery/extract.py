@@ -106,7 +106,10 @@ def images(o, who):
         return
     if not isinstance(o, dict):
         return
+    # Tool inputs and outputs can carry their own "type" that is an object, not a string.
     kind = o.get("type")
+    if not isinstance(kind, str):
+        kind = None
     role = o.get("role")
     if role == "user":
         who = "you"
