@@ -3,7 +3,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { exec, hc, focused, agents, theme, props, openOverlay, closeOverlay, readTextFile, appHome, notify, layout, run, window, nextCommand } from "herdr";
+import { exec, hc, focused, agents, theme, props, openOverlay, closeOverlay, readTextFile, appHome, notify, layout, run, window, nextCommand, settings } from "herdr";
 import { writeFile, readFile, mkdir, readdir, unlink, exists } from "fs/promises";
 import { createHash } from "crypto";
 
@@ -15,6 +15,8 @@ const WHO = { you: "Pasted", tool: "Tool", sub: "Subagent", agent: "Agent" };
 const FILTERS = [["all", "All"], ["you", "Pasted"], ["tool", "Tool"], ["sub", "Sub"], ["agent", "Agent"]];
 const SIZES = [72, 100, 140, 190, 260, 340];
 const GAP = 10;
+// on_size_change reports sizes with the app's zoom applied, while .w()/.p()/.gap() take sizes at zoom 1.
+const zoom = () => Number(settings().zoom) || 1;
 // Cached pictures and index.json, in the app's own data folder: images load only from paths under the app folder,
 // fs writes must resolve under it (a mod folder linked in from elsewhere doesn't), and it is outside the mod's hot reload.
 const CACHE = `data/${MOD}/cache`;
@@ -506,7 +508,8 @@ export default class AgentGallery extends View {
 
     return v_flex().id("ai-root").size_full().bg(t.surface).text_color(t.foreground)
       .on_size_change((size, cx) => {
-        if (Math.abs(size.width - this.width) > 1) { this.width = size.width; cx.notify(); }
+        const w = size.width / zoom();
+        if (Math.abs(w - this.width) > 1) { this.width = w; cx.notify(); }
       })
       .child(this.header(t, all))
       .child(body)
@@ -551,7 +554,8 @@ export default class AgentGallery extends View {
     return v_flex().id("ai-viewer").size_full().bg(t.surface).text_color(t.foreground)
       .track_focus(this.h)
       .on_size_change((size, cx) => {
-        if (Math.abs(size.width - this.vw) > 1 || Math.abs(size.height - this.vh) > 1) { this.vw = size.width; this.vh = size.height; cx.notify(); }
+        const w = size.width / zoom(), h = size.height / zoom();
+        if (Math.abs(w - this.vw) > 1 || Math.abs(h - this.vh) > 1) { this.vw = w; this.vh = h; cx.notify(); }
       })
       .on_key_down((e, cx) => {
         const k = e.keystroke;
