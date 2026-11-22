@@ -60,13 +60,34 @@ def newest(pattern):
     return max(files, key=os.path.getmtime) if files else None
 
 
+def load_json(path):
+    try:
+        with open(path) as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def claude_session(pid):
+    # A Claude Code session moved to a background job is parked: the conversation goes on in the job's session.
+    s = load_json(f"{HOME}/.claude/sessions/{pid}.json")
+    for _ in range(5):
+        job = s and s.get("parkedJobId")
+        if not job:
+            break
+        jobs = [j for j in map(load_json, glob.glob(f"{HOME}/.claude/sessions/*.json")) if j and j.get("jobId") == job]
+        if not jobs:
+            break
+        s = max(jobs, key=lambda j: j.get("updatedAt") or 0)
+    return s and s.get("sessionId")
+
+
 def find_transcript(pid, argv, cwd):
     pids = tree(pid) if pid else []
     for p in pids:
-        try:
-            with open(f"{HOME}/.claude/sessions/{p}.json") as f:
-                sid = json.load(f)["sessionId"]
-        except (OSError, ValueError, KeyError):
+        sid = claude_session(p)
+        if not isinstance(sid, str) or not sid:
             continue
         hit = glob.glob(f"{HOME}/.claude/projects/*/{sid}.jsonl")
         if hit:

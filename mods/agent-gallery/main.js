@@ -26,6 +26,10 @@ const indexFile = () => `${cacheDir()}/index.json`;
 const mac = () => window()?.platform === "macos";
 const icon = (name) => svg(`mods/${MOD}/${name}.svg`);
 const machineOf = (address) => (address?.includes("/") ? address.split("/")[0] : null);
+// Agent programs that can run without reporting a status, e.g. a Claude Code session moved to a background job.
+const PROGRAMS = new Set(["claude", "codex", "pi"]);
+// Where those terminals are ("space / tab"), since agents() doesn't list them.
+const wheres = {};
 function joinBytes(parts) {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
   let at = 0;
@@ -62,7 +66,7 @@ function agentName(address) {
   const a = agents().find((x) => x.address === address);
   const m = machineOf(address);
   const tab = a?.tab_name && !/^\d+$/.test(a.tab_name) ? a.tab_name : null;
-  const name = a ? [a.space_name, tab].filter(Boolean).join(" / ") || a.title || address : address;
+  const name = a ? [a.space_name, tab].filter(Boolean).join(" / ") || a.title || address : wheres[address] || address;
   return m ? `${name} · ${m}` : name;
 }
 
@@ -336,8 +340,25 @@ export default class AgentGallery extends View {
 
   follow(cx) {
     const f = focused()?.terminal;
-    if (!f || f === this.target || !agents().some((a) => a.address === f)) return;
+    if (!f || f === this.target) return;
+    if (agents().some((a) => a.address === f)) return this.retarget(f, cx);
+    // Not an agent to Herdr: once per focus, look at what runs there.
+    if (f === this.probed) return;
+    this.probed = f;
+    cx.spawn(async (cx) => {
+      try {
+        const t = JSON.parse((await hc(["get", f, "--json"])).stdout);
+        const argv = t.foreground?.argv ?? [];
+        if (!argv.slice(0, 2).some((a) => PROGRAMS.has(String(a).split("/").pop()))) return;
+        if (typeof t.labels?.where === "string") wheres[f] = t.labels.where;
+        if (focused()?.terminal === f) { this.retarget(f, cx); cx.notify(); }
+      } catch {}
+    });
+  }
+
+  retarget(f, cx) {
     this.target = f;
+    this.probed = null;
     this.hover = null;
     if (this.ready && !this.all) this.load(cx);
   }
